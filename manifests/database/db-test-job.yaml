@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-connectivity-test
+  namespace: database
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-test
+          image: postgres:16
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              echo "Testing connection to my-db-postgresql..."
+              psql -h my-db-postgresql -U appuser -d appdb -c "SELECT 1;" \
+                && echo "DB_TEST_PASSED" \
+                || (echo "DB_TEST_FAILED" && exit 1)

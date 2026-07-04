@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sorcery.fullname" . }}-config
+  namespace: {{ .Values.namespace }}
+data:
+  APP_ENVIRONMENT: {{ .Values.config.appEnvironment | quote }}

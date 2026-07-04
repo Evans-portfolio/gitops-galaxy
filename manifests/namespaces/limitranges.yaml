@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: database-limits
+  namespace: database
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 100m, memory: 128Mi }
+      default: { cpu: 250m, memory: 256Mi }
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: app-limits
+  namespace: app
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 100m, memory: 64Mi }
+      default: { cpu: 250m, memory: 128Mi }
