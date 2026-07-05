@@ -1,5 +1,4 @@
 namespace: app
-
 backend:
   replicaCount: 1
   image:
@@ -8,13 +7,13 @@ backend:
     pullPolicy: IfNotPresent
   port: 8080
   args:
-    - "-listen=:8080"
-    - "-text=Hello from the backend! Pod: $(POD_NAME)"
+  - "-listen=:8080"
+  - "-text=Hello from the backend! Pod: $(POD_NAME)"
   env:
-    - name: POD_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
   resources:
     requests:
       cpu: 100m
@@ -22,12 +21,11 @@ backend:
     limits:
       cpu: 250m
       memory: 128Mi
-
 frontend:
   replicaCount: 2
   image:
     repository: nginx
-    tag: "1.27.0"
+    tag: "1.27.5"
     pullPolicy: IfNotPresent
   port: 80
   resources:
@@ -42,10 +40,8 @@ frontend:
     minReplicas: 2
     maxReplicas: 6
     targetCPUUtilizationPercentage: 70
-
 ingress:
   enabled: true
   host: gitops.local
-
 config:
   appEnvironment: "development"
