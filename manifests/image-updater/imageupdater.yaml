@@ -1,0 +1,23 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: sorcery-image-updater
+  namespace: argocd
+spec:
+  writeBackConfig:
+    method: "git:secret:argocd/git-creds"
+    gitConfig:
+      repository: "https://gitea.kood.tech/evanschepkwony1/gitops-galaxy.git"
+      branch: "main"
+      writeBackTarget: "helmvalues:/charts/sorcery-chart/values.yaml"
+  applicationRefs:
+    - namePattern: "sorcery-app"
+      images:
+        - alias: "frontend"
+          imageName: "nginx:1.27.x"
+          commonUpdateSettings:
+            updateStrategy: "semver"
+          manifestTargets:
+            helm:
+              name: "frontend.image.repository"
+              tag: "frontend.image.tag"
