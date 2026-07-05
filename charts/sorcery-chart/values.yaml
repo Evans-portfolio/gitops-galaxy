@@ -26,8 +26,8 @@ backend:
 frontend:
   replicaCount: 2
   image:
-    repository: nginxdemos/hello
-    tag: "latest"
+    repository: nginx
+    tag: "1.27.0"
     pullPolicy: IfNotPresent
   port: 80
   resources:
