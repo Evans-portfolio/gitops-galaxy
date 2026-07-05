@@ -25,7 +25,7 @@ frontend:
   replicaCount: 2
   image:
     repository: nginx
-    tag: "1.27.5"
+    tag: "1.27.3"
     pullPolicy: IfNotPresent
   port: 80
   resources:
