@@ -36,4 +36,4 @@ frontend:
 ingress:
   enabled: true
 config:
-  lastCIBuild: "8"
+  lastCIBuild: "5"
