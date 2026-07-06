@@ -77,8 +77,8 @@ policy.csv: |
   p, role:image-updater, applications, get, */*, allow
   p, role:image-updater, applications, update, */*, allow
   g, image-updater, role:image-updater
-  p, role:jenkins-ci, applications, get, default/sorcery-app, allow
-  p, role:jenkins-ci, applications, sync, default/sorcery-app, allow
+  p, role:jenkins-ci, applications, get, default/sorcery-app-*, allow
+  p, role:jenkins-ci, applications, sync, default/sorcery-app-*, allow
   p, role:jenkins-ci, projects, get, default, allow
   g, jenkins-ci, role:jenkins-ci
 policy.default: ""
@@ -100,17 +100,21 @@ policy.matchMode: glob
 - `role:jenkins-ci` — added for the CI/CD pipeline (Jenkins running as a
   Docker container on the host, not in-cluster). Deliberately scoped
   **narrower** than `role:image-updater`: `get`/`sync` on
-  `default/sorcery-app` only (not `*/*`), plus `projects, get, default`
+  `default/sorcery-app-*` only (not `*/*`), plus `projects, get, default`
   (required because ArgoCD RBAC checks project-level `get` in addition to
   the `applications` rule for `app get`/`app sync` calls — confirmed
   empirically: `app get` failed with `permission denied: projects, get,
   default` until that line was added). No `create`/`delete`/`override`
-  verbs, no `repositories` access. Verified live: `argocd app get`,
-  `argocd app sync`, and `argocd app wait --health` all succeed for
-  `sorcery-app` with the `jenkins-ci` token; `argocd repo add`/`repo list`
-  and access to any other Application both fail with `PermissionDenied`.
-  This is the tighter pattern the `image-updater` role should eventually be
-  moved to (see the flagged gap above).
+  verbs, no `repositories` access. Originally scoped to the exact name
+  `default/sorcery-app`; widened to the glob `default/sorcery-app-*` when
+  the single Application was replaced by `sorcery-app-dev`/`-staging`/
+  `-production` (multi-environment setup) — `policy.matchMode: glob` was
+  already set, so this was a one-line change. Verified live against all
+  three real Applications: `argocd app get` succeeds for
+  `sorcery-app-dev`/`sorcery-app-staging`/`sorcery-app-production`;
+  `argocd repo list` still fails with `PermissionDenied`. This is the
+  tighter pattern the `image-updater` role should eventually be moved to
+  (see the flagged gap above).
 - Human access today relies entirely on the **built-in `admin` superuser**
   (`admin.enabled: "true"` in `argocd-cm`) — a superuser that bypasses RBAC
   policy entirely. No scoped human/team roles (e.g. `role:developer`,
@@ -155,5 +159,5 @@ Jenkins container.
 | Layer | Status | Action needed |
 |---|---|---|
 | Cluster permissions (§1) | Chart default, documented above | None — accepted as-is; scoping-down is a known, deferred option |
-| ArgoCD access policy (§2) | `policy.default=""` (secure deny-by-default) confirmed; `image-updater` role (`*/*`, broad) and `jenkins-ci` role (scoped to `default/sorcery-app`) both live | None blocking; human RBAC beyond `admin` superuser still a named gap; `image-updater` role could be tightened to match `jenkins-ci`'s pattern |
+| ArgoCD access policy (§2) | `policy.default=""` (secure deny-by-default) confirmed; `image-updater` role (`*/*`, broad) and `jenkins-ci` role (scoped to `default/sorcery-app-*`) both live | None blocking; human RBAC beyond `admin` superuser still a named gap; `image-updater` role could be tightened to match `jenkins-ci`'s pattern |
 | Jenkins k8s identity (§3) | `jenkins-ci` ServiceAccount scoped to `create/update` on `applications.argoproj.io` in `argocd` namespace only, verified empirically | None blocking |
