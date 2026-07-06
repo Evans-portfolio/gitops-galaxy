@@ -31,9 +31,6 @@ pipeline {
             git config user.name "jenkins-ci"
 
             sed -i "s/appEnvironment: .*/appEnvironment: \\"ci-build-${BUILD_NUMBER}\\"/" charts/sorcery-chart/values.yaml
-            # TEMPORARY: deliberately break the frontend tag to test the
-            # post{failure} rollback stage end-to-end. Remove after the test.
-            sed -i 's/tag: "1.27.5"/tag: "1.27.9999-does-not-exist"/' charts/sorcery-chart/values.yaml
 
             git add charts/sorcery-chart/values.yaml
             git commit -m "ci: pipeline build ${BUILD_NUMBER} - update appEnvironment"
