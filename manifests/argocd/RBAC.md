@@ -77,6 +77,10 @@ policy.csv: |
   p, role:image-updater, applications, get, */*, allow
   p, role:image-updater, applications, update, */*, allow
   g, image-updater, role:image-updater
+  p, role:jenkins-ci, applications, get, default/sorcery-app, allow
+  p, role:jenkins-ci, applications, sync, default/sorcery-app, allow
+  p, role:jenkins-ci, projects, get, default, allow
+  g, jenkins-ci, role:jenkins-ci
 policy.default: ""
 policy.matchMode: glob
 ```
@@ -85,14 +89,28 @@ policy.matchMode: glob
   explicit `p,`/`g,` line gets **no** access. This is the secure default
   (as opposed to setting it to `role:readonly` or `role:admin`, which would
   grant a fallback role to anyone who authenticates).
-- The only role currently defined is `role:image-updater` (get/update on
-  `applications` across all projects/apps), mapped to the `image-updater`
-  local account via the `g,` (group membership) line.
+- `role:image-updater` (get/update on `applications` across **all**
+  projects/apps, `*/*`) — mapped to the `image-updater` local account via
+  the `g,` (group membership) line.
 - `argocd-cm` already declares `accounts.image-updater: apiKey` — a local
   API-key-only account exists, tied to that role. **This was pre-staged
   alongside the `ImageUpdater` CR work** (`manifests/image-updater/imageupdater.yaml`,
   ~1h before this audit) even though it's scoped as a later step — flagging
   it here since it's already live, not something to redo.
+- `role:jenkins-ci` — added for the CI/CD pipeline (Jenkins running as a
+  Docker container on the host, not in-cluster). Deliberately scoped
+  **narrower** than `role:image-updater`: `get`/`sync` on
+  `default/sorcery-app` only (not `*/*`), plus `projects, get, default`
+  (required because ArgoCD RBAC checks project-level `get` in addition to
+  the `applications` rule for `app get`/`app sync` calls — confirmed
+  empirically: `app get` failed with `permission denied: projects, get,
+  default` until that line was added). No `create`/`delete`/`override`
+  verbs, no `repositories` access. Verified live: `argocd app get`,
+  `argocd app sync`, and `argocd app wait --health` all succeed for
+  `sorcery-app` with the `jenkins-ci` token; `argocd repo add`/`repo list`
+  and access to any other Application both fail with `PermissionDenied`.
+  This is the tighter pattern the `image-updater` role should eventually be
+  moved to (see the flagged gap above).
 - Human access today relies entirely on the **built-in `admin` superuser**
   (`admin.enabled: "true"` in `argocd-cm`) — a superuser that bypasses RBAC
   policy entirely. No scoped human/team roles (e.g. `role:developer`,
@@ -105,9 +123,37 @@ but is worth a named follow-up (define a `role:readonly` or similar and map
 real users/groups to it) before treating ArgoCD access control as "done"
 beyond the single-admin case.
 
+## 3. Jenkins' Kubernetes identity (separate from both layers above)
+
+Jenkins runs as a Docker container on the **host**, not in-cluster, so it
+needs its own Kubernetes credential to run `kubectl apply` against the
+`Application` resource — this is a third, distinct identity from ArgoCD's
+own controller/server ServiceAccounts (§1) and from ArgoCD's own access
+policy (§2).
+
+`manifests/jenkins/serviceaccount.yaml` defines:
+
+- `ServiceAccount jenkins-ci` in the `argocd` namespace.
+- `Role jenkins-ci-role` (namespaced to `argocd`): `apiGroups: [argoproj.io]`,
+  `resources: [applications]`, `verbs: [get, list, watch, create, update,
+  patch]` — no `delete`, no other resource types, no other namespace.
+- `RoleBinding jenkins-ci-rolebinding` binding the two.
+- A static `Secret` (`kubernetes.io/service-account-token`) so the token
+  doesn't expire like a `kubectl create token` bound token would, since
+  it's meant to be baked into a long-lived Jenkins credential.
+
+Verified empirically with `kubectl auth can-i --as=system:serviceaccount:argocd:jenkins-ci`:
+can `create`/`update` `applications.argoproj.io` in `argocd`; **cannot**
+`delete` Applications, `create` Secrets, `list` pods, or touch anything in
+the `app` namespace. A kubeconfig built from this SA's token was also
+tested directly (`kubectl get applications` succeeds, `kubectl get pods`
+in `argocd` is `Forbidden`) both from the host and from inside the actual
+Jenkins container.
+
 ## Summary
 
 | Layer | Status | Action needed |
 |---|---|---|
 | Cluster permissions (§1) | Chart default, documented above | None — accepted as-is; scoping-down is a known, deferred option |
-| ArgoCD access policy (§2) | `policy.default=""` (secure deny-by-default) confirmed; `image-updater` role already pre-configured | None blocking; human RBAC beyond `admin` superuser is a named gap, not addressed here |
+| ArgoCD access policy (§2) | `policy.default=""` (secure deny-by-default) confirmed; `image-updater` role (`*/*`, broad) and `jenkins-ci` role (scoped to `default/sorcery-app`) both live | None blocking; human RBAC beyond `admin` superuser still a named gap; `image-updater` role could be tightened to match `jenkins-ci`'s pattern |
+| Jenkins k8s identity (§3) | `jenkins-ci` ServiceAccount scoped to `create/update` on `applications.argoproj.io` in `argocd` namespace only, verified empirically | None blocking |
