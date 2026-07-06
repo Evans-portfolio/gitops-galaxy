@@ -25,7 +25,7 @@ frontend:
   replicaCount: 2
   image:
     repository: nginx
-    tag: "1.27.9999-does-not-exist"
+    tag: "1.27.5"
     pullPolicy: IfNotPresent
   port: 80
   resources:
@@ -44,4 +44,4 @@ ingress:
   enabled: true
   host: gitops.local
 config:
-  appEnvironment: "ci-build-3"
+  appEnvironment: "ci-build-2"
