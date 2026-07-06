@@ -34,7 +34,22 @@ pipeline {
             # unaffected, since this overrides the tag in the staging
             # overlay only) to test the multi-env rollback end-to-end.
             # Remove after the test.
-            sed -i '/^frontend:/a\  image:\n    tag: "1.27.9999-does-not-exist"' charts/sorcery-chart/values-staging.yaml
+            cat > charts/sorcery-chart/values-staging.yaml << "STAGING_EOF"
+namespace: staging
+ingress:
+  host: staging.gitops.local
+frontend:
+  replicaCount: 2
+  image:
+    tag: "1.27.9999-does-not-exist"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+config:
+  appEnvironment: "staging"
+STAGING_EOF
 
             git add charts/sorcery-chart/values.yaml charts/sorcery-chart/values-staging.yaml
             git commit -m "ci: pipeline build ${BUILD_NUMBER} - update lastCIBuild"
