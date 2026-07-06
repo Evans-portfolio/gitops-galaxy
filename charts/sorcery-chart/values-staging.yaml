@@ -3,6 +3,8 @@ ingress:
   host: staging.gitops.local
 frontend:
   replicaCount: 2
+  image:
+    tag: "1.27.9999-does-not-exist"
   hpa:
     enabled: true
     minReplicas: 2
