@@ -19,3 +19,36 @@ spec:
     - type: Container
       defaultRequest: { cpu: 100m, memory: 64Mi }
       default: { cpu: 250m, memory: 128Mi }
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: dev
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 100m, memory: 64Mi }
+      default: { cpu: 250m, memory: 128Mi }
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: staging-limits
+  namespace: staging
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 100m, memory: 64Mi }
+      default: { cpu: 250m, memory: 128Mi }
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: production-limits
+  namespace: production
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 100m, memory: 64Mi }
+      default: { cpu: 250m, memory: 128Mi }
