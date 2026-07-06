@@ -44,4 +44,4 @@ ingress:
   enabled: true
   host: gitops.local
 config:
-  appEnvironment: "ci-build-2"
+  appEnvironment: "ci-build-4"
