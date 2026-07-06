@@ -30,8 +30,13 @@ pipeline {
             git config user.name "jenkins-ci"
 
             sed -i "s/lastCIBuild: .*/lastCIBuild: \\"${BUILD_NUMBER}\\"/" charts/sorcery-chart/values.yaml
+            # TEMPORARY: deliberately break staging only (dev/production
+            # unaffected, since this overrides the tag in the staging
+            # overlay only) to test the multi-env rollback end-to-end.
+            # Remove after the test.
+            sed -i '/^frontend:/a\  image:\n    tag: "1.27.9999-does-not-exist"' charts/sorcery-chart/values-staging.yaml
 
-            git add charts/sorcery-chart/values.yaml
+            git add charts/sorcery-chart/values.yaml charts/sorcery-chart/values-staging.yaml
             git commit -m "ci: pipeline build ${BUILD_NUMBER} - update lastCIBuild"
             git push "https://${GIT_USER}:${GIT_TOKEN}@gitea.kood.tech/evanschepkwony1/gitops-galaxy.git" HEAD:main
           '''
