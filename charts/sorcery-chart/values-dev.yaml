@@ -1,0 +1,9 @@
+namespace: dev
+ingress:
+  host: dev.gitops.local
+frontend:
+  replicaCount: 1
+  hpa:
+    enabled: false
+config:
+  appEnvironment: "dev"

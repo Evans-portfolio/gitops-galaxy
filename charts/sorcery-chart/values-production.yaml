@@ -1,0 +1,12 @@
+namespace: production
+ingress:
+  host: gitops.local
+frontend:
+  replicaCount: 2
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+config:
+  appEnvironment: "production"
