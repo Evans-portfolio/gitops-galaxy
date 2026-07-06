@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sorcery-app-production
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://gitea.kood.tech/evanschepkwony1/gitops-galaxy.git
+    targetRevision: HEAD
+    path: charts/sorcery-chart
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-production.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  # Deliberately no `automated` block: production only deploys when the
+  # Jenkins pipeline explicitly calls `argocd app sync` after the manual
+  # promotion approval gate. ArgoCD will never auto-deploy this on its own
+  # just because git changed.
+  syncPolicy:
+    syncOptions:
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

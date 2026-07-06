@@ -6,11 +6,6 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: app
----
-apiVersion: v1
-kind: Namespace
-metadata:
   name: argocd
 ---
 apiVersion: v1

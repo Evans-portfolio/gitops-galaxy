@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sorcery-app
+  name: sorcery-app-dev
   namespace: argocd
 spec:
   project: default
@@ -12,9 +12,10 @@ spec:
     helm:
       valueFiles:
         - values.yaml
+        - values-dev.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: app
+    namespace: dev
   syncPolicy:
     automated:
       prune: true
