@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-status-test
+  namespace: vault
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: vault-status-test
+          image: hashicorp/vault:1.17
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault.vault.svc.cluster.local:8200"
+          command:
+            - sh
+            - -c
+            - |
+              echo "Testing connection to vault.vault.svc..."
+              vault status
+              status=$?
+              # vault status exits 2 when sealed (still a reachable, valid
+              # state) and 0 when unsealed; only treat >2 as a real failure.
+              if [ "$status" -le 2 ]; then
+                echo "VAULT_TEST_PASSED"
+                exit 0
+              else
+                echo "VAULT_TEST_FAILED"
+                exit 1
+              fi

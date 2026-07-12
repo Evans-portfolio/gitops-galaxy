@@ -1,0 +1,45 @@
+injector:
+  # Not needed yet: External Secrets Operator talks to the Vault API
+  # directly rather than via sidecar injection. Keeps footprint/RBAC
+  # minimal until pod-level secret injection is actually needed.
+  enabled: false
+
+server:
+  ui:
+    enabled: true
+
+  dataStorage:
+    enabled: true
+    size: 2Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Single-node "standalone with integrated storage" is expressed via the
+  # chart's ha/raft code path even at replicas: 1 (raft is the only
+  # integrated storage backend the chart supports, and it's always wired
+  # through server.ha.*).
+  standalone:
+    enabled: false
+  ha:
+    enabled: true
+    replicas: 1
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+        listener "tcp" {
+          address     = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_disable = 1
+        }
+        storage "raft" {
+          path = "/vault/data"
+        }
+        service_registration "kubernetes" {}

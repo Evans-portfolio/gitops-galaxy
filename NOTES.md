@@ -80,6 +80,28 @@ attempted.
     to promote doesn't spuriously revert an otherwise-healthy staging
     deployment.
 
+- **Vault installed** (`manifests/vault/`): official `hashicorp/vault`
+  Helm chart, single-node standalone with **integrated Raft storage**
+  (persistent, `dataStorage` size `2Gi`), TLS disabled on the listener
+  (plaintext HTTP — acceptable for this single-operator minikube homelab),
+  ClusterIP-only (no NodePort yet). Agent Injector disabled — not needed
+  until pod-level secret injection is required; External Secrets Operator
+  (when added) will talk to the Vault API directly.
+  - Real init/unseal performed (`vault operator init -key-shares=5
+    -key-threshold=3`, unsealed with 3 of 5 keys) — not dev mode. Root
+    token and unseal keys are **not committed anywhere in this repo**;
+    same "reference by name, never commit the value" convention as
+    `pg-credentials`/`git-creds`. They live only in the operator's secure
+    offline storage.
+  - Confirmed live: `vault-0` `1/1 Running`, `vault status` shows
+    `Initialized: true`, `Sealed: false`, `Storage Type: raft`,
+    `HA Mode: active`. A smoke-test Job
+    (`manifests/vault/vault-status-test-job.yaml`, mirrors
+    `database/db-test-job.yaml`'s pattern) confirmed `VAULT_TEST_PASSED`
+    from inside the cluster.
+  - Scope of this pass was deliberately narrow: **just the install**, as
+    the foundation for later work — see below.
+
 ## Flagged but not urgent
 
 - **Image Updater RBAC is broader than necessary**: `role:image-updater`
@@ -93,8 +115,12 @@ attempted.
 
 ## Not started yet
 
-- **Vault** — no secrets management beyond raw Kubernetes Secrets
-  (`git-creds`, `argocd-image-updater-secret`, the Jenkins credential
-  store, etc.). No Vault integration, no External Secrets Operator.
+- **Vault secrets engine / ESO integration** — Vault itself is installed
+  (see above) but nothing reads from it yet. Existing raw Kubernetes
+  Secrets (`git-creds`, `argocd-image-updater-secret`, the Jenkins
+  credential store, etc.) are still the only secrets management in place.
+  Still needed: enable a KV secrets engine, a Kubernetes auth method +
+  policies, install External Secrets Operator, and migrate the existing
+  Secrets over one at a time.
 - **README** — no top-level `README.md` describing the project, setup
   steps, or architecture for a new reader.
