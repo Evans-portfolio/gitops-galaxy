@@ -197,6 +197,44 @@ attempted.
     ESO-managed via Vault.** See `manifests/vault/ESO-INTEGRATION.md` for
     the full migration record.
 
+- **Jenkins credential store migrated to Vault** — the last remaining
+  item. Jenkins runs as a Docker container on the host, not in-cluster,
+  so this used a different mechanism than ESO: the official HashiCorp
+  Vault Jenkins plugin, backing the *same* three credential IDs the
+  `Jenkinsfile` already references (`gitea-jenkins-token`,
+  `argocd-jenkins-token`, `jenkins-kubeconfig`) — **zero Jenkinsfile
+  changes**. Full details in `manifests/vault/JENKINS-INTEGRATION.md`.
+  - New `manifests/vault/vault-nodeport.yaml` (port `30820`) — required
+    because Jenkins cannot reach Vault's ClusterIP at all (confirmed
+    empirically; same reason ArgoCD's NodePort exists). AppRole auth
+    method (not Kubernetes auth — Jenkins isn't a K8s workload), policy
+    `jenkins-read` scoped to `kv/data/jenkins/*` as a glob (deliberately
+    different from `eso-read.hcl`'s exact-path discipline — `jenkins/`
+    is dedicated to this one consumer, unlike the shared `argocd/`
+    prefix). RoleID/SecretID delivered as files on the `jenkins_home`
+    volume, never committed.
+  - One Jenkins-native credential remains: the `VaultAppRoleCredential`
+    bootstrap identity itself (unavoidable — some single credential
+    always has to unlock everything else). Net effect: three application
+    secrets reduced to one minimal bootstrap credential.
+  - **Verified live, not just configured**: SHA-256 of all four values
+    (gitea username/password, argocd token, kubeconfig content) identical
+    before/after. A real pipeline build (#9) was triggered via the
+    Jenkins API and ran through Checkout (git fetch via
+    `gitea-jenkins-token`) → commit & push (real git push, same
+    credential) → Deploy to Dev and Staging (`kubectl apply` via
+    `jenkins-kubeconfig`, `argocd sync`/`wait` via
+    `argocd-jenkins-token`) — both environments reached `Healthy`. Paused
+    at the production approval gate and was **aborted** (not approved);
+    result was `ABORTED`, not `FAILURE`, confirming the `post{failure}`
+    rollback logic correctly didn't fire.
+  - Along the way, a pre-existing, unrelated issue was found and fixed
+    (via a spawned follow-up session): `init.groovy.d/basic-security.groovy`
+    was silently resetting the Jenkins `admin` password to a hardcoded
+    plaintext value on every container restart. It's now idempotent and
+    sources a real bootstrap password from a `JENKINS_BOOTSTRAP_PW` env
+    var instead.
+
 ## Flagged but not urgent
 
 - **Image Updater RBAC is broader than necessary**: `role:image-updater`
@@ -210,12 +248,7 @@ attempted.
 
 ## Not started yet
 
-- **Jenkins credential store migration** — the Jenkins credential store
-  (Gitea token, kubeconfig, ArgoCD token used by the CI pipeline) is out
-  of scope for ESO entirely (K8s-only; Jenkins runs as a Docker container
-  on the host, not in-cluster — see `RBAC.md` §3). Would need a different
-  delivery mechanism (Vault Jenkins plugin/CSI) if ever migrated. All
-  three K8s Secrets originally flagged here are now done — see "Fully
-  done and verified" above.
 - **README** — no top-level `README.md` describing the project, setup
-  steps, or architecture for a new reader.
+  steps, or architecture for a new reader. (Vault secrets management —
+  all K8s Secrets and the Jenkins credential store — is now fully
+  migrated; see "Fully done and verified" above.)
