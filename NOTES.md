@@ -102,6 +102,35 @@ attempted.
   - Scope of this pass was deliberately narrow: **just the install**, as
     the foundation for later work — see below.
 
+- **External Secrets Operator wired to Vault** (`manifests/external-secrets/`,
+  `manifests/vault/ESO-INTEGRATION.md`): KV v2 engine enabled at `kv/`
+  (path layout `kv/<namespace>/<secret-name>`), Kubernetes auth method
+  enabled and configured against this cluster (`vault` ServiceAccount
+  granted `system:auth-delegator` via
+  `manifests/vault/vault-tokenreview-clusterrolebinding.yaml`, required
+  for TokenReview). Policy `eso-test-read`
+  (`manifests/vault/policies/eso-test-read.hcl`) and auth role
+  `eso-test-role` scoped narrowly to `kv/test/*` and the `external-secrets`
+  ServiceAccount only — same tight-scoping discipline as `role:jenkins-ci`
+  (not `role:image-updater`'s unscoped pattern flagged below).
+  - ESO installed via the official `external-secrets/external-secrets`
+    Helm chart in its own `external-secrets` namespace (quota/limitrange
+    added alongside `vault`'s). All 3 pods (controller, cert-controller,
+    webhook) confirmed `1/1 Running`.
+  - `ClusterSecretStore/vault-backend` confirmed `Ready: True`, using
+    ESO's own controller ServiceAccount via explicit `serviceAccountRef`
+    (not implicit pod identity).
+  - **Round trip proven live**: wrote `kv/test/hello` (`foo=bar`) into
+    Vault, applied a throwaway `ExternalSecret`, confirmed the
+    materialized `Secret`'s `foo` key decoded to `bar`, then fully tore
+    down the `ExternalSecret`, materialized `Secret`, and Vault test data
+    — nothing left running. Reproducible steps documented in
+    `manifests/external-secrets/README.md`.
+  - Scope deliberately narrow: **plumbing only, no real secret migrated**.
+    `pg-credentials`, `git-creds`, `argocd-image-updater-secret` are all
+    still untouched raw K8s Secrets — confirmed unaffected, and all three
+    ArgoCD Applications stayed `Synced`/`Healthy` throughout this pass.
+
 ## Flagged but not urgent
 
 - **Image Updater RBAC is broader than necessary**: `role:image-updater`
@@ -115,12 +144,15 @@ attempted.
 
 ## Not started yet
 
-- **Vault secrets engine / ESO integration** — Vault itself is installed
-  (see above) but nothing reads from it yet. Existing raw Kubernetes
-  Secrets (`git-creds`, `argocd-image-updater-secret`, the Jenkins
-  credential store, etc.) are still the only secrets management in place.
-  Still needed: enable a KV secrets engine, a Kubernetes auth method +
-  policies, install External Secrets Operator, and migrate the existing
-  Secrets over one at a time.
+- **Real secret migration to Vault** — the ESO/Vault plumbing is done and
+  proven (see above), but `pg-credentials`, `git-creds`, and
+  `argocd-image-updater-secret` are all still raw, manually-created K8s
+  Secrets. Migrating each needs its own namespace-scoped Vault policy/role
+  (see the "widening" section of `manifests/vault/ESO-INTEGRATION.md`) and
+  a committed `ExternalSecret` per secret — not done here, one at a time
+  as a deliberate follow-up. The Jenkins credential store (Gitea token,
+  kubeconfig, ArgoCD token) is out of scope for ESO entirely (K8s-only) —
+  would need a different delivery mechanism (Vault Jenkins plugin/CSI) if
+  ever migrated.
 - **README** — no top-level `README.md` describing the project, setup
   steps, or architecture for a new reader.

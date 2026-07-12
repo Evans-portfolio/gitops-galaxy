@@ -52,3 +52,14 @@ spec:
     - type: Container
       defaultRequest: { cpu: 100m, memory: 128Mi }
       default: { cpu: 250m, memory: 256Mi }
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: external-secrets-limits
+  namespace: external-secrets
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 100m, memory: 128Mi }
+      default: { cpu: 250m, memory: 256Mi }

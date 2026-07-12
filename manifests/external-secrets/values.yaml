@@ -1,0 +1,10 @@
+serviceAccount:
+  create: true
+  name: external-secrets
+
+# No resources override: the chart ships resources: {} by default for all
+# three Deployments (controller, cert-controller, webhook). The
+# external-secrets-limits LimitRange (100m/128Mi -> 250m/256Mi per
+# container) applies automatically, which is sufficient for these
+# lightweight control-plane pods — same sizing as every other infra
+# namespace in this repo.
