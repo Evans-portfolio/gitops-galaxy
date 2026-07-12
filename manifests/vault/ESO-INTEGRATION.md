@@ -138,14 +138,43 @@ Same shape as `pg-credentials`, with two deltas:
   restart count unchanged; `git-creds-test-job.yaml` returned `HTTP 200`
   / `GIT_CREDS_TEST_PASSED` against the real Gitea API.
 
-### Remaining: `argocd-image-updater-secret`
+### `argocd-image-updater-secret` (argocd) — done, 2026-07-12
 
-Same shape again: read+hash current value, `vault kv put` under
-`kv/argocd/argocd-image-updater-secret`, widen `eso-read.hcl` with one
-more `argocd/`-scoped stanza (this is the natural point to consider
-collapsing the two exact-path stanzas into a `kv/data/argocd/*` glob,
-now that there'd be two real secrets under it — evaluate at that time
-rather than deciding preemptively), commit an `ExternalSecret` with
-`creationPolicy: Merge`, verify via hash comparison plus a real
-functional check (e.g. confirming the ArgoCD `image-updater` local
-account's API key still authenticates against `argocd-server`).
+Same shape again, plus resolving the open question from the `git-creds`
+entry above:
+
+- **Confirmed the Secret's only key is `argocd.token`**, and that it's
+  read directly from the Kubernetes API at runtime by the
+  `argocd-image-updater` controller — not injected via env or a mounted
+  volume (its `ClusterRole` grants `get` on `secrets`/`configmaps`
+  cluster-wide, which is how it reads this well-known secret
+  name/key). This is the ArgoCD API token for the `image-updater` local
+  account (`role:image-updater` in `manifests/argocd/RBAC.md` §2 —
+  `get`/`update` on `applications`, `*/*`).
+- **Decided: keep exact-path stanzas, don't collapse to a
+  `kv/data/argocd/*` glob**, even now that three real secrets exist
+  under `argocd/`. `role:jenkins-ci`'s glob-widening precedent in
+  `RBAC.md` was about multiple *environments* of the same application; these
+  are three genuinely different secrets for different consumers. A
+  namespace-wide glob would silently cover any future secret placed
+  under `argocd/` without a deliberate, reviewable widening step — the
+  exact thing this discipline exists to prevent. Three explicit lines
+  costs nothing.
+- **Functional verification**: `manifests/argocd/argocd-image-updater-token-test-job.yaml`
+  does a live, read-only `curl` with `Authorization: Bearer
+  <token>` against `https://argocd-server.argocd.svc.cluster.local/api/v1/applications`
+  and asserts `HTTP 200` — proves the token actually authenticates and is
+  authorized, not just that it's syntactically present.
+- Verified: post-migration SHA-256 of `argocd.token` matched the
+  pre-migration hash exactly; `argocd-image-updater-controller`'s restart
+  count unchanged; the test Job returned `HTTP 200` /
+  `ARGOCD_TOKEN_TEST_PASSED` against the real ArgoCD API.
+
+## All three secrets migrated
+
+`pg-credentials`, `git-creds`, and `argocd-image-updater-secret` are now
+all ESO-managed via `ClusterSecretStore/vault-backend`. The only secret
+management left outside this scope is the Jenkins credential store
+(Gitea token, kubeconfig, ArgoCD token for the CI pipeline) — out of
+scope for ESO entirely since it's K8s-only; would need a different
+delivery mechanism (Vault Jenkins plugin/CSI) if ever migrated.

@@ -168,6 +168,35 @@ attempted.
     real Gitea API. `argocd-image-updater-secret` still untouched; all
     three ArgoCD Applications stayed `Synced`/`Healthy` throughout.
 
+- **`argocd-image-updater-secret` migrated to Vault** — third and final
+  secret cut over (`manifests/argocd/argocd-image-updater-secret-externalsecret.yaml`,
+  `manifests/argocd/argocd-image-updater-token-test-job.yaml`). Its only
+  key, `argocd.token`, is read directly from the K8s API at runtime by
+  the `argocd-image-updater` controller (confirmed via its `ClusterRole`
+  granting `get` on `secrets`) — not injected via env/volume, so there
+  was no restart dependency either way, but `creationPolicy: Merge` /
+  `deletionPolicy: Retain` were still used for consistency with the
+  other two migrations.
+  - `eso-read.hcl` widened with a third stanza, scoped to the exact path
+    `kv/data/argocd/argocd-image-updater-secret`. **Decided against**
+    collapsing the three `argocd/` stanzas into a `kv/data/argocd/*`
+    glob — these are three different secrets for different consumers
+    (not multiple environments of one app, unlike `role:jenkins-ci`'s
+    glob precedent), so a namespace-wide glob would silently cover any
+    future secret dropped under `argocd/` without a deliberate widening
+    step.
+  - **Verified live**: SHA-256 of `argocd.token` identical before/after;
+    controller restart count unchanged; a dedicated test Job made a real
+    authenticated call (`Authorization: Bearer <token>`) to
+    `argocd-server`'s `/api/v1/applications` and got `HTTP 200`, proving
+    the migrated token still authenticates and is authorized, not just
+    present. All three ArgoCD Applications stayed `Synced`/`Healthy`;
+    both prior `ExternalSecret`s (`pg-credentials`, `git-creds`) stayed
+    `Ready` throughout.
+  - **All three secrets originally listed in `NOTES.md` are now
+    ESO-managed via Vault.** See `manifests/vault/ESO-INTEGRATION.md` for
+    the full migration record.
+
 ## Flagged but not urgent
 
 - **Image Updater RBAC is broader than necessary**: `role:image-updater`
@@ -181,20 +210,12 @@ attempted.
 
 ## Not started yet
 
-- **Remaining secret migration to Vault** — `pg-credentials` and
-  `git-creds` are done (see above); `argocd-image-updater-secret`
-  (`argocd` namespace) is still a raw, manually-created K8s Secret. Same
-  proven shape applies (see "Real secret migrations" in
-  `manifests/vault/ESO-INTEGRATION.md`): read+hash current value, `vault
-  kv put` under `kv/argocd/argocd-image-updater-secret`, widen
-  `eso-read.hcl` (this is the natural point to consider collapsing the
-  two exact-path `argocd/` stanzas into a glob, now that two real secrets
-  would live there), commit an `ExternalSecret` with `creationPolicy:
-  Merge`, verify via hash comparison plus a real functional check (e.g.
-  confirming the `image-updater` local ArgoCD account's API key still
-  authenticates). The Jenkins credential store (Gitea token, kubeconfig,
-  ArgoCD token) is out of scope for ESO
-  entirely (K8s-only) — would need a different delivery mechanism (Vault
-  Jenkins plugin/CSI) if ever migrated.
+- **Jenkins credential store migration** — the Jenkins credential store
+  (Gitea token, kubeconfig, ArgoCD token used by the CI pipeline) is out
+  of scope for ESO entirely (K8s-only; Jenkins runs as a Docker container
+  on the host, not in-cluster — see `RBAC.md` §3). Would need a different
+  delivery mechanism (Vault Jenkins plugin/CSI) if ever migrated. All
+  three K8s Secrets originally flagged here are now done — see "Fully
+  done and verified" above.
 - **README** — no top-level `README.md` describing the project, setup
   steps, or architecture for a new reader.

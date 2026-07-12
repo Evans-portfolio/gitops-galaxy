@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: argocd-image-updater-token-test
+  namespace: argocd
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: argocd-token-test
+          image: curlimages/curl:8.9.1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          env:
+            - name: ARGOCD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: argocd-image-updater-secret
+                  key: argocd.token
+          command:
+            - sh
+            - -c
+            - |
+              echo "Testing argocd-image-updater-secret against the live ArgoCD API..."
+              code=$(curl -sk -o /dev/null -w "%{http_code}" \
+                -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+                https://argocd-server.argocd.svc.cluster.local/api/v1/applications)
+              echo "HTTP status: $code"
+              if [ "$code" = "200" ]; then
+                echo "ARGOCD_TOKEN_TEST_PASSED"
+              else
+                echo "ARGOCD_TOKEN_TEST_FAILED"
+                exit 1
+              fi

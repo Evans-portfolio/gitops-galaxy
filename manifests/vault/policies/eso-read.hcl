@@ -8,10 +8,14 @@
 # widened deliberately and reviewably rather than granted broad upfront
 # (see manifests/argocd/RBAC.md).
 #
-# Currently covers: pg-credentials (database namespace), git-creds
-# (argocd namespace, scoped to the exact secret name, not a
-# kv/data/argocd/* glob — widen to a glob only once multiple secrets
-# under argocd/ actually justify it).
+# Currently covers: pg-credentials (database namespace), git-creds and
+# argocd-image-updater-secret (argocd namespace). All argocd/* entries
+# are deliberately kept as exact-path stanzas rather than collapsed into
+# a kv/data/argocd/* glob: these are three genuinely different secrets
+# for different consumers (not multiple environments of the same app,
+# unlike role:jenkins-ci's glob-widening precedent in RBAC.md), so a
+# namespace-wide glob would silently grant access to any future secret
+# placed under argocd/ without a deliberate, reviewable widening step.
 
 path "kv/data/database/*" {
   capabilities = ["read"]
@@ -26,5 +30,13 @@ path "kv/data/argocd/git-creds" {
 }
 
 path "kv/metadata/argocd/git-creds" {
+  capabilities = ["read", "list"]
+}
+
+path "kv/data/argocd/argocd-image-updater-secret" {
+  capabilities = ["read"]
+}
+
+path "kv/metadata/argocd/argocd-image-updater-secret" {
   capabilities = ["read", "list"]
 }
