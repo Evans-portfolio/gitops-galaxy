@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: git-creds-connectivity-test
+  namespace: argocd
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: git-creds-test
+          image: curlimages/curl:8.9.1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          env:
+            - name: GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: git-creds
+                  key: username
+            - name: GIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: git-creds
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              echo "Testing git-creds against the live Gitea API..."
+              # curl -u handles special characters in credentials correctly,
+              # unlike embedding them directly in a URL (which needs
+              # percent-encoding and breaks on unencoded reserved chars).
+              code=$(curl -s -o /dev/null -w "%{http_code}" -u "${GIT_USERNAME}:${GIT_PASSWORD}" \
+                https://gitea.kood.tech/api/v1/repos/evanschepkwony1/gitops-galaxy)
+              echo "HTTP status: $code"
+              if [ "$code" = "200" ]; then
+                echo "GIT_CREDS_TEST_PASSED"
+              else
+                echo "GIT_CREDS_TEST_FAILED"
+                exit 1
+              fi

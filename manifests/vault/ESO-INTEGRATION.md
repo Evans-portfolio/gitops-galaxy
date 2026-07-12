@@ -111,11 +111,41 @@ The shape followed, now the proven template for the remaining two:
    ESO-managed Secret actually works end-to-end, not just that ESO
    *thinks* it synced.
 
-### Remaining: `git-creds`, `argocd-image-updater-secret`
+### `git-creds` (argocd) — done, 2026-07-12
 
-Same shape as above: read+hash current values, `vault kv put` under
-`kv/argocd/<name>`, widen `eso-read.hcl` with a new `kv/data/argocd/*`
-(or narrower) path stanza, commit an `ExternalSecret` with
-`creationPolicy: Merge`, verify via hash comparison plus a real functional
-check (an actual ArgoCD Image Updater write-back / `argocd-server`
-restart-free confirmation, analogous to `db-connectivity-test`).
+Same shape as `pg-credentials`, with two deltas:
+
+- **Same policy file, one more stanza**, scoped to the exact secret path
+  (`kv/data/argocd/git-creds`, not a `kv/data/argocd/*` glob) — same
+  `eso-role` reused, only the policy content widened. Mirrors
+  `role:jenkins-ci`'s precedent of starting scoped to an exact name and
+  only widening to a glob once multiple secrets actually justify it (that
+  moment will be `argocd-image-updater-secret`'s migration, next).
+- **Functional verification couldn't reuse Image Updater's own reconcile
+  loop** — it only exercises the git write-back codepath when there's an
+  actual pending image change (`images_updated=0` at migration time), so
+  watching its logs wouldn't have proven anything. Instead:
+  `manifests/argocd/git-creds-test-job.yaml` (mirrors `db-test-job.yaml`)
+  does a direct, read-only `curl -u <user>:<pass>` against the Gitea API
+  (`GET /api/v1/repos/evanschepkwony1/gitops-galaxy`) and asserts
+  `HTTP 200`. (First attempt used `git ls-remote` with credentials
+  embedded directly in the URL — failed with "Bad hostname" because the
+  username contains characters that need percent-encoding to safely
+  appear in a URL; `curl -u` handles that correctly without needing to
+  encode anything, so the Job uses that instead.)
+- Verified: post-migration SHA-256 of both `username`/`password` matched
+  pre-migration hashes exactly; `argocd-image-updater-controller`'s
+  restart count unchanged; `git-creds-test-job.yaml` returned `HTTP 200`
+  / `GIT_CREDS_TEST_PASSED` against the real Gitea API.
+
+### Remaining: `argocd-image-updater-secret`
+
+Same shape again: read+hash current value, `vault kv put` under
+`kv/argocd/argocd-image-updater-secret`, widen `eso-read.hcl` with one
+more `argocd/`-scoped stanza (this is the natural point to consider
+collapsing the two exact-path stanzas into a `kv/data/argocd/*` glob,
+now that there'd be two real secrets under it — evaluate at that time
+rather than deciding preemptively), commit an `ExternalSecret` with
+`creationPolicy: Merge`, verify via hash comparison plus a real
+functional check (e.g. confirming the ArgoCD `image-updater` local
+account's API key still authenticates against `argocd-server`).

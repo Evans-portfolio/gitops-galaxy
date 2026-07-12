@@ -150,6 +150,24 @@ attempted.
   - `git-creds`/`argocd-image-updater-secret` still untouched; all three
     ArgoCD Applications stayed `Synced`/`Healthy` throughout.
 
+- **`git-creds` migrated to Vault** (`manifests/argocd/git-creds-externalsecret.yaml`,
+  `manifests/argocd/git-creds-test-job.yaml`): second real secret cut
+  over, same shape as `pg-credentials`. `eso-read.hcl` widened with one
+  more stanza scoped to the exact path `kv/data/argocd/git-creds` (not a
+  glob) — same `eso-role`, no new role. `creationPolicy: Merge` /
+  `deletionPolicy: Retain` again, patching `username`/`password` into the
+  existing Secret in place.
+  - Image Updater's own reconcile loop had `images_updated=0` at
+    migration time, so it couldn't be used to prove the write-back
+    credential still works — a dedicated `git-creds-test-job.yaml`
+    (mirrors `db-test-job.yaml`) does a direct, read-only `curl -u`
+    against the Gitea API instead and asserts `HTTP 200`.
+  - **Verified live**: SHA-256 of both `username`/`password` identical
+    before/after; `argocd-image-updater-controller`'s restart count
+    unchanged; test Job returned `GIT_CREDS_TEST_PASSED` against the
+    real Gitea API. `argocd-image-updater-secret` still untouched; all
+    three ArgoCD Applications stayed `Synced`/`Healthy` throughout.
+
 ## Flagged but not urgent
 
 - **Image Updater RBAC is broader than necessary**: `role:image-updater`
@@ -163,15 +181,19 @@ attempted.
 
 ## Not started yet
 
-- **Remaining secret migrations to Vault** — `pg-credentials` is done
-  (see above); `git-creds` and `argocd-image-updater-secret` (both in the
-  `argocd` namespace) are still raw, manually-created K8s Secrets. Same
+- **Remaining secret migration to Vault** — `pg-credentials` and
+  `git-creds` are done (see above); `argocd-image-updater-secret`
+  (`argocd` namespace) is still a raw, manually-created K8s Secret. Same
   proven shape applies (see "Real secret migrations" in
-  `manifests/vault/ESO-INTEGRATION.md`): read+hash current values, `vault
-  kv put` under `kv/argocd/<name>`, widen `eso-read.hcl` with a new path
-  stanza, commit an `ExternalSecret` with `creationPolicy: Merge`, verify
-  via hash comparison plus a real functional check. The Jenkins credential
-  store (Gitea token, kubeconfig, ArgoCD token) is out of scope for ESO
+  `manifests/vault/ESO-INTEGRATION.md`): read+hash current value, `vault
+  kv put` under `kv/argocd/argocd-image-updater-secret`, widen
+  `eso-read.hcl` (this is the natural point to consider collapsing the
+  two exact-path `argocd/` stanzas into a glob, now that two real secrets
+  would live there), commit an `ExternalSecret` with `creationPolicy:
+  Merge`, verify via hash comparison plus a real functional check (e.g.
+  confirming the `image-updater` local ArgoCD account's API key still
+  authenticates). The Jenkins credential store (Gitea token, kubeconfig,
+  ArgoCD token) is out of scope for ESO
   entirely (K8s-only) — would need a different delivery mechanism (Vault
   Jenkins plugin/CSI) if ever migrated.
 - **README** — no top-level `README.md` describing the project, setup
