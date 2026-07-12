@@ -126,10 +126,29 @@ attempted.
     down the `ExternalSecret`, materialized `Secret`, and Vault test data
     — nothing left running. Reproducible steps documented in
     `manifests/external-secrets/README.md`.
-  - Scope deliberately narrow: **plumbing only, no real secret migrated**.
-    `pg-credentials`, `git-creds`, `argocd-image-updater-secret` are all
-    still untouched raw K8s Secrets — confirmed unaffected, and all three
-    ArgoCD Applications stayed `Synced`/`Healthy` throughout this pass.
+  - Scope deliberately narrow in this pass: **plumbing only, no real
+    secret migrated yet** — `git-creds`/`argocd-image-updater-secret`
+    remain untouched raw K8s Secrets (`pg-credentials` migrated next, see
+    below). All three ArgoCD Applications stayed `Synced`/`Healthy`
+    throughout.
+
+- **`pg-credentials` migrated to Vault** (`manifests/database/pg-credentials-externalsecret.yaml`,
+  `manifests/vault/policies/eso-read.hcl`): first real secret cut over,
+  using the plumbing above. New operational policy `eso-read` + auth role
+  `eso-role` (scoped to `kv/data/database/*` only — `eso-test-role` left
+  untouched for future smoke tests), `ClusterSecretStore/vault-backend`
+  repointed to authenticate via `eso-role`.
+  - `target.creationPolicy: Merge` used (not `Owner`) — patches
+    `password`/`postgres-password` into the **existing** manually-created
+    Secret in place, no delete/recreate, no gap. `target.deletionPolicy:
+    Retain` — removing the `ExternalSecret` later won't delete the Secret.
+  - **Verified live, not just "synced"**: SHA-256 of both keys identical
+    before/after (storage-backend change, not a password rotation);
+    `my-db-postgresql-0`'s restart count unchanged (pod never touched);
+    `db-connectivity-test` Job re-run and passed (`DB_TEST_PASSED`)
+    against the real database through the ESO-managed Secret.
+  - `git-creds`/`argocd-image-updater-secret` still untouched; all three
+    ArgoCD Applications stayed `Synced`/`Healthy` throughout.
 
 ## Flagged but not urgent
 
@@ -144,15 +163,16 @@ attempted.
 
 ## Not started yet
 
-- **Real secret migration to Vault** — the ESO/Vault plumbing is done and
-  proven (see above), but `pg-credentials`, `git-creds`, and
-  `argocd-image-updater-secret` are all still raw, manually-created K8s
-  Secrets. Migrating each needs its own namespace-scoped Vault policy/role
-  (see the "widening" section of `manifests/vault/ESO-INTEGRATION.md`) and
-  a committed `ExternalSecret` per secret — not done here, one at a time
-  as a deliberate follow-up. The Jenkins credential store (Gitea token,
-  kubeconfig, ArgoCD token) is out of scope for ESO entirely (K8s-only) —
-  would need a different delivery mechanism (Vault Jenkins plugin/CSI) if
-  ever migrated.
+- **Remaining secret migrations to Vault** — `pg-credentials` is done
+  (see above); `git-creds` and `argocd-image-updater-secret` (both in the
+  `argocd` namespace) are still raw, manually-created K8s Secrets. Same
+  proven shape applies (see "Real secret migrations" in
+  `manifests/vault/ESO-INTEGRATION.md`): read+hash current values, `vault
+  kv put` under `kv/argocd/<name>`, widen `eso-read.hcl` with a new path
+  stanza, commit an `ExternalSecret` with `creationPolicy: Merge`, verify
+  via hash comparison plus a real functional check. The Jenkins credential
+  store (Gitea token, kubeconfig, ArgoCD token) is out of scope for ESO
+  entirely (K8s-only) — would need a different delivery mechanism (Vault
+  Jenkins plugin/CSI) if ever migrated.
 - **README** — no top-level `README.md` describing the project, setup
   steps, or architecture for a new reader.

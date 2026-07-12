@@ -27,10 +27,24 @@ config.
 - **Auth role `eso-test-role`**: bound to the `external-secrets`
   ServiceAccount in the `external-secrets` namespace only, mapped to the
   `eso-test-read` policy, `ttl=1h`.
+- **Policy `eso-read`** (`manifests/vault/policies/eso-read.hcl`): the
+  permanent operational policy for real (non-test) secret access.
+  Currently covers `kv/data/database/*` + `kv/metadata/database/*` only —
+  widened one path at a time as real secrets migrate, same discipline as
+  `eso-test-read` above.
+- **Auth role `eso-role`**: bound to the same `external-secrets`
+  ServiceAccount/namespace as `eso-test-role`, but mapped to the `eso-read`
+  policy instead. Vault allows multiple roles to bind the same SA identity
+  with different attached policies — `eso-test-role` and `eso-role` are
+  both valid logins for the `external-secrets` SA, just requested by
+  different `role=` names, so `eso-test-role` stays untouched and
+  available for future throwaway smoke tests.
 - **`ClusterSecretStore/vault-backend`** (`manifests/external-secrets/clustersecretstore.yaml`):
   points ESO at `http://vault.vault.svc.cluster.local:8200`, `kv` mount,
-  `v2`, authenticating via `eso-test-role` using ESO's own controller
-  ServiceAccount (`serviceAccountRef`, not implicit pod identity).
+  `v2`, authenticating via **`eso-role`** (updated from `eso-test-role`
+  once real policy existed) using ESO's own controller ServiceAccount
+  (`serviceAccountRef`, not implicit pod identity). This is the permanent
+  operational store now.
 
 ## Commands run (imperative — no install-script convention in this repo)
 
@@ -65,21 +79,43 @@ vault kv put kv/test/hello foo=bar
 See `manifests/external-secrets/README.md` for the exact reproducible
 steps if you want to re-run this smoke test.
 
-## Widening this for a real secret migration
+## Real secret migrations
 
-When migrating a real secret (e.g. `pg-credentials`), the general shape:
+### `pg-credentials` (database) — done, 2026-07-12
 
-1. `vault kv put kv/database/pg-credentials password=... postgres-password=...`
-2. A new policy scoped to `kv/data/database/*` (or extend `eso-test-read`
-   if reusing the same role makes sense for that consumer).
-3. A new Vault auth role bound to whichever ServiceAccount actually needs
-   read access (do **not** just reuse `eso-test-role` broadly — keep the
-   one-role-per-consumer discipline `RBAC.md` establishes for ArgoCD).
-4. A real `ExternalSecret` in the `database` namespace, committed to the
-   repo (not transient like the proof-of-concept above) targeting
-   `vault-backend`, writing a `Secret` named `pg-credentials` so nothing
-   else in `manifests/database/values.yaml` needs to change
-   (`existingSecret: pg-credentials` keeps working — ESO becomes the
-   thing that keeps that Secret populated instead of a human).
-5. Remove the original manually-created `pg-credentials` Secret only after
-   confirming the ESO-managed one reconciles successfully.
+The shape followed, now the proven template for the remaining two:
+
+1. Read the current live Secret's values, hashed (SHA-256) for later
+   comparison — never printed to a terminal transcript or written to a
+   repo file.
+2. `vault kv put kv/database/pg-credentials password=... postgres-password=...`
+   using the exact live values (a storage-backend migration, not a
+   rotation).
+3. New policy `eso-read` scoped to `kv/data/database/*` +
+   `kv/metadata/database/*`, new auth role `eso-role` bound to the
+   `external-secrets` SA — **not** reusing `eso-test-role`/`eso-test-read`,
+   which stay reserved for throwaway smoke tests.
+4. `ClusterSecretStore/vault-backend` updated to authenticate via
+   `eso-role`.
+5. `manifests/database/pg-credentials-externalsecret.yaml` committed:
+   `target.creationPolicy: Merge` (not `Owner`) — patches the
+   `password`/`postgres-password` keys into the **existing** manually-
+   created Secret in place. No delete-then-recreate step, no gap where the
+   Secret doesn't exist, no risk to the already-running Postgres pod.
+   `target.deletionPolicy: Retain` — if this `ExternalSecret` is ever
+   removed, the Secret and its data stay.
+6. Verified: post-migration SHA-256 of both keys matched the
+   pre-migration hashes exactly (no accidental rotation); `my-db-postgresql-0`'s
+   restart count was unchanged (pod never touched); `db-connectivity-test`
+   Job re-run and passed live against the real database, proving the
+   ESO-managed Secret actually works end-to-end, not just that ESO
+   *thinks* it synced.
+
+### Remaining: `git-creds`, `argocd-image-updater-secret`
+
+Same shape as above: read+hash current values, `vault kv put` under
+`kv/argocd/<name>`, widen `eso-read.hcl` with a new `kv/data/argocd/*`
+(or narrower) path stanza, commit an `ExternalSecret` with
+`creationPolicy: Merge`, verify via hash comparison plus a real functional
+check (an actual ArgoCD Image Updater write-back / `argocd-server`
+restart-free confirmation, analogous to `db-connectivity-test`).
