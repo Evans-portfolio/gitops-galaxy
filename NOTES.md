@@ -1,6 +1,6 @@
 # Project status — GitOps Galaxy
 
-Snapshot as of 2026-07-12. This reflects what has actually been verified in
+Snapshot as of 2026-07-13. This reflects what has actually been verified in
 the running cluster and pushed to `origin/main`, not just what's been
 attempted.
 
@@ -241,18 +241,34 @@ attempted.
   `ESO-INTEGRATION.md`, and `JENKINS-INTEGRATION.md` for the detailed
   record rather than duplicating it.
 
+- **`role:image-updater` tightened**: `applications, get/update` scope
+  narrowed from unscoped `*/*` to `default/sorcery-app-*`, matching
+  `role:jenkins-ci`'s pattern (`manifests/argocd/RBAC.md` §2). Live
+  change to `argocd-rbac-cm` (Helm-managed, not a committed manifest —
+  `policy.matchMode: glob` was already set, so this was a two-line diff).
+  **Verified live**: three post-change Image Updater reconcile cycles
+  all showed unchanged `applications=1 images_considered=1 errors=0`, no
+  auth/RBAC denial log lines, all three ArgoCD Applications stayed
+  `Synced`/`Healthy` throughout.
+
+- **Scoped human ArgoCD role added**: `role:developer` (`get`/`sync`/
+  `action/*` on `default/sorcery-app-*` only, no `create`/`delete`/
+  `override`/`repositories`/`clusters`/`accounts`) plus a new local
+  account `king` (`accounts.king: login` in `argocd-cm`) bound to it —
+  same local-account + RBAC-binding pattern already used for
+  `image-updater`/`jenkins-ci`. Closes the "no scoped human-facing role"
+  gap. **Verified live, logged in as `king` (not `admin`)**: `app list`
+  shows all three Applications, `app get`/`app sync sorcery-app-dev` both
+  succeed, `app delete sorcery-app-dev` correctly fails with
+  `PermissionDenied`, `account can-i get repositories/clusters/accounts`
+  all return `no`. `king` has no Kubernetes-level access at all, so
+  RBAC-modification (editing `argocd-rbac-cm` itself) isn't reachable
+  through any layer, not just denied by ArgoCD's own policy.
+
 ## Flagged but not urgent
 
-- **Image Updater RBAC is broader than necessary**: `role:image-updater`
-  still grants `applications, get/update, */*` — unscoped to any
-  project/app name, unlike `role:jenkins-ci`'s tighter glob-scoped pattern.
-  Functionally fine today; worth tightening to match the `jenkins-ci`
-  pattern as a later least-privilege cleanup.
-- **No scoped human-facing ArgoCD role** beyond the built-in `admin`
-  superuser — fine for a single-operator project, named gap if more humans
-  need access later.
+Nothing outstanding at this snapshot.
 
 ## Not started yet
 
-Nothing outstanding at this snapshot. See "Flagged but not urgent" above
-for known, deliberately-deferred gaps.
+Nothing outstanding at this snapshot.

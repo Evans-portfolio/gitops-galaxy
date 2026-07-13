@@ -74,13 +74,18 @@ Current `argocd-rbac-cm`:
 
 ```yaml
 policy.csv: |
-  p, role:image-updater, applications, get, */*, allow
-  p, role:image-updater, applications, update, */*, allow
+  p, role:image-updater, applications, get, default/sorcery-app-*, allow
+  p, role:image-updater, applications, update, default/sorcery-app-*, allow
   g, image-updater, role:image-updater
   p, role:jenkins-ci, applications, get, default/sorcery-app-*, allow
   p, role:jenkins-ci, applications, sync, default/sorcery-app-*, allow
   p, role:jenkins-ci, projects, get, default, allow
   g, jenkins-ci, role:jenkins-ci
+  p, role:developer, applications, get, default/sorcery-app-*, allow
+  p, role:developer, applications, sync, default/sorcery-app-*, allow
+  p, role:developer, applications, action/*, default/sorcery-app-*, allow
+  p, role:developer, projects, get, default, allow
+  g, king, role:developer
 policy.default: ""
 policy.matchMode: glob
 ```
@@ -89,18 +94,22 @@ policy.matchMode: glob
   explicit `p,`/`g,` line gets **no** access. This is the secure default
   (as opposed to setting it to `role:readonly` or `role:admin`, which would
   grant a fallback role to anyone who authenticates).
-- `role:image-updater` (get/update on `applications` across **all**
-  projects/apps, `*/*`) — mapped to the `image-updater` local account via
-  the `g,` (group membership) line.
+- `role:image-updater` — mapped to the `image-updater` local account via
+  the `g,` (group membership) line. **Originally unscoped (`*/*`), tightened
+  to `default/sorcery-app-*`** (matching `role:jenkins-ci`'s pattern below)
+  once the gap was flagged — `policy.matchMode: glob` was already set, so
+  this was a two-line change. Verified live: three post-change Image
+  Updater reconcile cycles all showed unchanged `applications=1
+  images_considered=1 errors=0`, no auth/RBAC denials, all three ArgoCD
+  Applications stayed `Synced`/`Healthy` throughout.
 - `argocd-cm` already declares `accounts.image-updater: apiKey` — a local
   API-key-only account exists, tied to that role. **This was pre-staged
   alongside the `ImageUpdater` CR work** (`manifests/image-updater/imageupdater.yaml`,
   ~1h before this audit) even though it's scoped as a later step — flagging
   it here since it's already live, not something to redo.
 - `role:jenkins-ci` — added for the CI/CD pipeline (Jenkins running as a
-  Docker container on the host, not in-cluster). Deliberately scoped
-  **narrower** than `role:image-updater`: `get`/`sync` on
-  `default/sorcery-app-*` only (not `*/*`), plus `projects, get, default`
+  Docker container on the host, not in-cluster). `get`/`sync` on
+  `default/sorcery-app-*` only, plus `projects, get, default`
   (required because ArgoCD RBAC checks project-level `get` in addition to
   the `applications` rule for `app get`/`app sync` calls — confirmed
   empirically: `app get` failed with `permission denied: projects, get,
@@ -108,24 +117,29 @@ policy.matchMode: glob
   verbs, no `repositories` access. Originally scoped to the exact name
   `default/sorcery-app`; widened to the glob `default/sorcery-app-*` when
   the single Application was replaced by `sorcery-app-dev`/`-staging`/
-  `-production` (multi-environment setup) — `policy.matchMode: glob` was
-  already set, so this was a one-line change. Verified live against all
+  `-production` (multi-environment setup). Verified live against all
   three real Applications: `argocd app get` succeeds for
   `sorcery-app-dev`/`sorcery-app-staging`/`sorcery-app-production`;
-  `argocd repo list` still fails with `PermissionDenied`. This is the
-  tighter pattern the `image-updater` role should eventually be moved to
-  (see the flagged gap above).
-- Human access today relies entirely on the **built-in `admin` superuser**
-  (`admin.enabled: "true"` in `argocd-cm`) — a superuser that bypasses RBAC
-  policy entirely. No scoped human/team roles (e.g. `role:developer`,
-  `role:readonly`) are defined yet.
-
-**Gap to flag, not yet fixed:** if more than one human/CI identity needs
-access, `policy.default: ""` plus zero human-facing roles means everyone
-who isn't `admin` gets nothing. That's fine for a single-operator project
-but is worth a named follow-up (define a `role:readonly` or similar and map
-real users/groups to it) before treating ArgoCD access control as "done"
-beyond the single-admin case.
+  `argocd repo list` still fails with `PermissionDenied`.
+- `role:developer` — the first scoped **human** role, added to close the
+  gap flagged below. `get`/`sync`/`action/*` (custom resource actions,
+  e.g. restart/resume) on `default/sorcery-app-*`, plus `projects, get,
+  default` (same requirement as `jenkins-ci`). No `create`/`delete`/
+  `override` verbs, no `repositories`/`clusters`/`accounts` access.
+  Mapped to a new local account `king` (`accounts.king: login` in
+  `argocd-cm`, password set via `argocd account update-password` — not
+  committed anywhere). Verified live, logged in as `king` (not `admin`):
+  `argocd app list` shows all three Applications, `argocd app get`/`app
+  sync sorcery-app-dev` both succeed; `argocd app delete sorcery-app-dev`
+  fails with `PermissionDenied`; `argocd account can-i get
+  repositories/clusters/accounts '*'` all return `no`. RBAC-modification
+  itself isn't reachable at any layer — `king` has no Kubernetes-level
+  access at all, so it can't touch the `argocd-rbac-cm` ConfigMap
+  regardless of ArgoCD-level policy.
+- Human access previously relied entirely on the **built-in `admin`
+  superuser** (`admin.enabled: "true"` in `argocd-cm`) — a superuser that
+  bypasses RBAC policy entirely. `role:developer`/`king` is now the first
+  non-superuser human-facing option, though `admin` remains enabled.
 
 ## 3. Jenkins' Kubernetes identity (separate from both layers above)
 
@@ -159,5 +173,5 @@ Jenkins container.
 | Layer | Status | Action needed |
 |---|---|---|
 | Cluster permissions (§1) | Chart default, documented above | None — accepted as-is; scoping-down is a known, deferred option |
-| ArgoCD access policy (§2) | `policy.default=""` (secure deny-by-default) confirmed; `image-updater` role (`*/*`, broad) and `jenkins-ci` role (scoped to `default/sorcery-app-*`) both live | None blocking; human RBAC beyond `admin` superuser still a named gap; `image-updater` role could be tightened to match `jenkins-ci`'s pattern |
+| ArgoCD access policy (§2) | `policy.default=""` (secure deny-by-default) confirmed; `image-updater`, `jenkins-ci`, and `developer` roles all scoped to `default/sorcery-app-*`; scoped human role (`king`) live alongside `admin` | None blocking |
 | Jenkins k8s identity (§3) | `jenkins-ci` ServiceAccount scoped to `create/update` on `applications.argoproj.io` in `argocd` namespace only, verified empirically | None blocking |
