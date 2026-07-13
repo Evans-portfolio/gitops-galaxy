@@ -235,6 +235,12 @@ attempted.
     sources a real bootstrap password from a `JENKINS_BOOTSTRAP_PW` env
     var instead.
 
+- **`README.md` added**: project overview, architecture diagram,
+  repo layout, bootstrap order, environment/sync-policy table, and a
+  secrets-management summary, linking out to `RBAC.md`,
+  `ESO-INTEGRATION.md`, and `JENKINS-INTEGRATION.md` for the detailed
+  record rather than duplicating it.
+
 ## Flagged but not urgent
 
 - **Image Updater RBAC is broader than necessary**: `role:image-updater`
@@ -248,7 +254,5 @@ attempted.
 
 ## Not started yet
 
-- **README** — no top-level `README.md` describing the project, setup
-  steps, or architecture for a new reader. (Vault secrets management —
-  all K8s Secrets and the Jenkins credential store — is now fully
-  migrated; see "Fully done and verified" above.)
+Nothing outstanding at this snapshot. See "Flagged but not urgent" above
+for known, deliberately-deferred gaps.
