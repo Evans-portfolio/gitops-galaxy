@@ -158,3 +158,4 @@ at a time, as documented in `manifests/vault/policies/*.hcl`.
   Vault ↔ Jenkins wiring and the Jenkins credential migration.
 - [`manifests/external-secrets/README.md`](manifests/external-secrets/README.md) —
   reproducible ESO ↔ Vault round-trip smoke test.
+# test Wed Jul 15 10:20:12 UTC 2026
