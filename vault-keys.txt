@@ -1,0 +1,31 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2869
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 devops@GitOps-Galaxy:~$ cat /tmp/claude-1000/-home-devops-gitops-galaxy/245c897f-4e31-4e38-a46d-8db84b643ade/scratchpad/vault-init.json\
+\{\
+  "unseal_keys_b64": [\
+    "opvU4XJ9haeXoVXuz2/7QFUMQBMgVCUHvEFEz+gQ9jNl",\
+    "+n1Bs3eoT6b04irIHlK5auf0UyUY1bFQbB50X5zNR7Jz",\
+    "dAWT4iAxZSEcXaVUDQGFL8ZVW4CKsOqEB3nevVKYWtkt",\
+    "rezvIiJ4TRZWIhLwO7aRMoUNzHBTu2vBpO4hxw/UKRiv",\
+    "fk3FzKMyG1zARs7oQyB+qcH8SCUSL76dVKaoTe8bBzlR"\
+  ],\
+  "unseal_keys_hex": [\
+    "a29bd4e1727d85a797a155eecf6ffb40550c401320542507bc4144cfe810f63365",\
+    "fa7d41b377a84fa6f4e22ac81e52b96ae7f4532518d5b1506c1e745f9ccd47b273",\
+    "740593e2203165211c5da5540d01852fc6555b808ab0ea840779debd52985ad92d",\
+    "adecef2222784d16562212f03bb69132850dcc7053bb6bc1a4ee21c70fd42918af",\
+    "7e4dc5cca3321b5cc046cee843207ea9c1fc4825122fbe9d54a6a84def1b073951"\
+  ],\
+  "unseal_shares": 5,\
+  "unseal_threshold": 3,\
+  "recovery_keys_b64": [],\
+  "recovery_keys_hex": [],\
+  "recovery_keys_shares": 0,\
+  "recovery_keys_threshold": 0,\
+  "root_token": "hvs.gXoExR2SeLlRAnUtG9JTWaVl"\
+\}}
