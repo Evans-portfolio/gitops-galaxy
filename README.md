@@ -160,3 +160,4 @@ at a time, as documented in `manifests/vault/policies/*.hcl`.
   reproducible ESO ↔ Vault round-trip smoke test.
 # test Wed Jul 15 10:20:12 UTC 2026
 ./start-phase6.sh to run
+# test Fri Jul 17 09:22:23 UTC 2026
