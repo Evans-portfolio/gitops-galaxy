@@ -1,19 +1,14 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: "{{ include "sorcery-chart.fullname" . }}-test"
+  name: "sorcery-test-connection"
   namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "sorcery-chart.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   containers:
-    - name: test-frontend
-      image: busybox
-      command: ['wget', '-qO-', 'http://{{ include "sorcery-chart.fullname" . }}-frontend:80']
     - name: test-backend
       image: busybox
-      command: ['wget', '-qO-', 'http://{{ include "sorcery-chart.fullname" . }}-backend:8080/health']
+      command: ['wget', '-qO-', 'http://sorcery-app-staging-backend.staging.svc.cluster.local:8080/health']
   restartPolicy: Never
