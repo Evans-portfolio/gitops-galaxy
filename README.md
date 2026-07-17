@@ -159,3 +159,4 @@ at a time, as documented in `manifests/vault/policies/*.hcl`.
 - [`manifests/external-secrets/README.md`](manifests/external-secrets/README.md) —
   reproducible ESO ↔ Vault round-trip smoke test.
 # test Wed Jul 15 10:20:12 UTC 2026
+./start-phase6.sh to run
